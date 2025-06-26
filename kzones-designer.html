@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KZones Layout Designer</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.4/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        body {
+            background-color: #111827;
+            color: white;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // Create icon components manually
+        const Download = ({ size = 16 }) => React.createElement('svg', {
+          width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round'
+        }, React.createElement('path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' }), React.createElement('polyline', { points: '7,10 12,15 17,10' }), React.createElement('line', { x1: 12, y1: 15, x2: 12, y2: 3 }));
+
+        const Upload = ({ size = 16 }) => React.createElement('svg', {
+          width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round'
+        }, React.createElement('path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' }), React.createElement('polyline', { points: '17,8 12,3 7,8' }), React.createElement('line', { x1: 12, y1: 3, x2: 12, y2: 15 }));
+
+        const Trash2 = ({ size = 16 }) => React.createElement('svg', {
+          width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round'
+        }, React.createElement('polyline', { points: '3,6 5,6 21,6' }), React.createElement('path', { d: 'm19,6 v14 a2,2 0 0 1-2,2 H7 a2,2 0 0 1-2-2 V6 m3,0 V4 a2,2 0 0 1 2-2 h4 a2,2 0 0 1 2,2 v2' }), React.createElement('line', { x1: 10, y1: 11, x2: 10, y2: 17 }), React.createElement('line', { x1: 14, y1: 11, x2: 14, y2: 17 }));
+
+        const Save = ({ size = 16 }) => React.createElement('svg', {
+          width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round'
+        }, React.createElement('path', { d: 'M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z' }), React.createElement('polyline', { points: '17,21 17,13 7,13 7,21' }), React.createElement('polyline', { points: '7,3 7,8 15,8' }));
+
+        const ZoneDesigner = () => {
+          const canvasRef = useRef(null);
+          const [zones, setZones] = useState([]);
+          const [isDrawing, setIsDrawing] = useState(false);
+          const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
+          const [currentZone, setCurrentZone] = useState(null);
+          const [layoutName, setLayoutName] = useState('New Layout');
+          const [selectedZone, setSelectedZone] = useState(null);
+          const [layouts, setLayouts] = useState([]);
+          const [snapEnabled, setSnapEnabled] = useState(true);
+          const [snapTolerance, setSnapTolerance] = useState(10);
+          const [snapIndicators, setSnapIndicators] = useState([]);
+          const [isDragging, setIsDragging] = useState(false);
+          const [draggedZone, setDraggedZone] = useState(null);
+          const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+          const [cursorStyle, setCursorStyle] = useState('crosshair');
+          const [displayResolution, setDisplayResolution] = useState({ width: 5120, height: 1440 });
+
+          const resolutionPresets = [
+            { name: "1920x1080 (Full HD)", width: 1920, height: 1080 },
+            { name: "2560x1440 (1440p)", width: 2560, height: 1440 },
+            { name: "3440x1440 (Ultrawide)", width: 3440, height: 1440 },
+            { name: "3840x2160 (4K)", width: 3840, height: 2160 },
+            { name: "5120x1440 (Super Ultrawide)", width: 5120, height: 1440 },
+            { name: "5120x2880 (5K)", width: 5120, height: 2880 },
+            { name: "Custom", width: 0, height: 0 }
+          ];
+
+          const maxCanvasWidth = 1200;
+          const aspectRatio = displayResolution.width / displayResolution.height;
+          const canvasWidth = maxCanvasWidth;
+          const canvasHeight = Math.round(maxCanvasWidth / aspectRatio);
+
+          const colors = [
+            '#FF4444', '#44FF44', '#4444FF', '#FFFF44', '#FF44FF', '#44FFFF',
+            '#FFA500', '#800080', '#00FF80', '#FF8000', '#8000FF', '#00FF40'
+          ];
+
+          useEffect(() => {
+            drawCanvas();
+          }, [zones, selectedZone, snapIndicators, isDragging, draggedZone]);
+
+          const drawCanvas = () => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 10; i++) {
+              const x = (i * canvasWidth) / 10;
+              const y = (i * canvasHeight) / 10;
+
+              ctx.beginPath();
+              ctx.moveTo(x, 0);
+              ctx.lineTo(x, canvasHeight);
+              ctx.stroke();
+
+              if (i <= 10) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvasWidth, y);
+                ctx.stroke();
+              }
+            }
+
+            zones.forEach((zone, index) => {
+              let displayZone = zone;
+              if (isDragging && draggedZone === index) {
+                displayZone = { ...zone, ...zones[draggedZone] };
+              }
+
+              const x = (displayZone.x * canvasWidth) / 100;
+              const y = (displayZone.y * canvasHeight) / 100;
+              const width = (displayZone.width * canvasWidth) / 100;
+              const height = (displayZone.height * canvasHeight) / 100;
+
+              const alpha = isDragging && draggedZone === index ? '60' : '40';
+              ctx.fillStyle = colors[index % colors.length] + alpha;
+              ctx.fillRect(x, y, width, height);
+
+              ctx.strokeStyle = colors[index % colors.length];
+              ctx.lineWidth = selectedZone === index ? 3 : isDragging && draggedZone === index ? 3 : 2;
+              if (isDragging && draggedZone === index) {
+                ctx.setLineDash([5, 5]);
+              } else {
+                ctx.setLineDash([]);
+              }
+              ctx.strokeRect(x, y, width, height);
+
+              ctx.fillStyle = '#fff';
+              ctx.font = '14px Arial';
+              ctx.fillText((index + 1).toString(), x + 5, y + 20);
+            });
+
+            ctx.setLineDash([]);
+
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            snapIndicators.forEach(indicator => {
+              ctx.beginPath();
+              if (indicator.type === 'vertical') {
+                ctx.moveTo(indicator.x, 0);
+                ctx.lineTo(indicator.x, canvasHeight);
+              } else if (indicator.type === 'horizontal') {
+                ctx.moveTo(0, indicator.y);
+                ctx.lineTo(canvasWidth, indicator.y);
+              }
+              ctx.stroke();
+            });
+          };
+
+          const getMousePos = (e) => {
+            const canvas = canvasRef.current;
+            const rect = canvas.getBoundingClientRect();
+            return {
+              x: e.clientX - rect.left,
+              y: e.clientY - rect.top
+            };
+          };
+
+          const getSnapPoints = () => {
+            const snapPoints = {
+              vertical: [0, canvasWidth],
+              horizontal: [0, canvasHeight]
+            };
+
+            for (let i = 1; i < 10; i++) {
+              snapPoints.vertical.push((i * canvasWidth) / 10);
+              snapPoints.horizontal.push((i * canvasHeight) / 10);
+            }
+
+            zones.forEach(zone => {
+              const x = (zone.x * canvasWidth) / 100;
+              const y = (zone.y * canvasHeight) / 100;
+              const width = (zone.width * canvasWidth) / 100;
+              const height = (zone.height * canvasHeight) / 100;
+
+              snapPoints.vertical.push(x, x + width);
+              snapPoints.horizontal.push(y, y + height);
+            });
+
+            return snapPoints;
+          };
+
+          const applySnapping = (pos) => {
+            if (!snapEnabled) return pos;
+
+            const snapPoints = getSnapPoints();
+            const indicators = [];
+            let snappedPos = { ...pos };
+
+            const nearestX = snapPoints.vertical.find(snapX =>
+              Math.abs(pos.x - snapX) <= snapTolerance
+            );
+            if (nearestX !== undefined) {
+              snappedPos.x = nearestX;
+              indicators.push({ type: 'vertical', x: nearestX });
+            }
+
+            const nearestY = snapPoints.horizontal.find(snapY =>
+              Math.abs(pos.y - snapY) <= snapTolerance
+            );
+            if (nearestY !== undefined) {
+              snappedPos.y = nearestY;
+              indicators.push({ type: 'horizontal', y: nearestY });
+            }
+
+            setSnapIndicators(indicators);
+            return snappedPos;
+          };
+
+          const updateCursor = (e) => {
+            if (isDragging) {
+              setCursorStyle('grabbing');
+              return;
+            }
+
+            const rawPos = getMousePos(e);
+            const overZone = zones.some(zone => {
+              const x = (zone.x * canvasWidth) / 100;
+              const y = (zone.y * canvasHeight) / 100;
+              const width = (zone.width * canvasWidth) / 100;
+              const height = (zone.height * canvasHeight) / 100;
+
+              return rawPos.x >= x && rawPos.x <= x + width && rawPos.y >= y && rawPos.y <= y + height;
+            });
+
+            setCursorStyle(overZone ? 'grab' : 'crosshair');
+          };
+
+          const handleResolutionChange = (preset) => {
+            if (preset.width === 0) return;
+            setDisplayResolution({ width: preset.width, height: preset.height });
+          };
+
+          const handleCustomResolution = (width, height) => {
+            if (width > 0 && height > 0) {
+              setDisplayResolution({ width: parseInt(width), height: parseInt(height) });
+            }
+          };
+
+          const handleMouseDown = (e) => {
+            const rawPos = getMousePos(e);
+            const pos = applySnapping(rawPos);
+
+            const clickedZone = zones.findIndex(zone => {
+              const x = (zone.x * canvasWidth) / 100;
+              const y = (zone.y * canvasHeight) / 100;
+              const width = (zone.width * canvasWidth) / 100;
+              const height = (zone.height * canvasHeight) / 100;
+
+              return rawPos.x >= x && rawPos.x <= x + width && rawPos.y >= y && rawPos.y <= y + height;
+            });
+
+            if (clickedZone !== -1) {
+              setSelectedZone(clickedZone);
+              setIsDragging(true);
+              setDraggedZone(clickedZone);
+
+              const zoneX = (zones[clickedZone].x * canvasWidth) / 100;
+              const zoneY = (zones[clickedZone].y * canvasHeight) / 100;
+              setDragOffset({
+                x: rawPos.x - zoneX,
+                y: rawPos.y - zoneY
+              });
+
+              setSnapIndicators([]);
+              return;
+            }
+
+            setSelectedZone(null);
+            setIsDrawing(true);
+            setStartPoint(pos);
+            setCurrentZone({
+              x: (pos.x / canvasWidth) * 100,
+              y: (pos.y / canvasHeight) * 100,
+              width: 0,
+              height: 0
+            });
+          };
+
+          const handleMouseMove = (e) => {
+            const rawPos = getMousePos(e);
+
+            if (isDragging && draggedZone !== null) {
+              const newZoneX = rawPos.x - dragOffset.x;
+              const newZoneY = rawPos.y - dragOffset.y;
+
+              const snappedPos = applySnapping({ x: newZoneX, y: newZoneY });
+
+              const newZones = [...zones];
+              newZones[draggedZone] = {
+                ...newZones[draggedZone],
+                x: Math.max(0, Math.min(100, (snappedPos.x / canvasWidth) * 100)),
+                y: Math.max(0, Math.min(100, (snappedPos.y / canvasHeight) * 100))
+              };
+
+              const zone = newZones[draggedZone];
+              if (zone.x + zone.width > 100) {
+                zone.x = 100 - zone.width;
+              }
+              if (zone.y + zone.height > 100) {
+                zone.y = 100 - zone.height;
+              }
+
+              setZones(newZones);
+              return;
+            }
+
+            if (isDrawing) {
+              const pos = applySnapping(rawPos);
+              const width = ((pos.x - startPoint.x) / canvasWidth) * 100;
+              const height = ((pos.y - startPoint.y) / canvasHeight) * 100;
+
+              setCurrentZone({
+                x: Math.min((startPoint.x / canvasWidth) * 100, (pos.x / canvasWidth) * 100),
+                y: Math.min((startPoint.y / canvasHeight) * 100, (pos.y / canvasHeight) * 100),
+                width: Math.abs(width),
+                height: Math.abs(height)
+              });
+              return;
+            }
+
+            if (snapEnabled) {
+              applySnapping(rawPos);
+            }
+          };
+
+          const handleMouseUp = () => {
+            if (isDragging) {
+              if (draggedZone !== null) {
+                const newZones = [...zones];
+                newZones[draggedZone] = {
+                  ...newZones[draggedZone],
+                  x: Math.round(newZones[draggedZone].x * 10) / 10,
+                  y: Math.round(newZones[draggedZone].y * 10) / 10
+                };
+                setZones(newZones);
+              }
+              setIsDragging(false);
+              setDraggedZone(null);
+              setDragOffset({ x: 0, y: 0 });
+            } else if (isDrawing && currentZone && currentZone.width > 1 && currentZone.height > 1) {
+              setZones([...zones, {
+                x: Math.round(currentZone.x * 10) / 10,
+                y: Math.round(currentZone.y * 10) / 10,
+                width: Math.round(currentZone.width * 10) / 10,
+                height: Math.round(currentZone.height * 10) / 10
+              }]);
+              setIsDrawing(false);
+              setCurrentZone(null);
+            } else {
+              setIsDrawing(false);
+              setCurrentZone(null);
+            }
+
+            setSnapIndicators([]);
+          };
+
+          const deleteZone = (index) => {
+            setZones(zones.filter((_, i) => i !== index));
+            setSelectedZone(null);
+          };
+
+          const clearZones = () => {
+            setZones([]);
+            setSelectedZone(null);
+          };
+
+          const exportLayout = () => {
+            const layout = {
+              name: layoutName,
+              zones: zones
+            };
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify([layout], null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `${layoutName.replace(/\s+/g, '_')}.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+          };
+
+          const addToLayouts = () => {
+            const newLayout = {
+              name: layoutName,
+              zones: [...zones]
+            };
+            setLayouts([...layouts, newLayout]);
+          };
+
+          const exportAllLayouts = () => {
+            const allLayouts = [...layouts];
+            if (zones.length > 0) {
+              allLayouts.push({
+                name: layoutName,
+                zones: zones
+              });
+            }
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allLayouts, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "kzones_layouts.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+          };
+
+          const importLayouts = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                try {
+                  const imported = JSON.parse(e.target.result);
+                  if (Array.isArray(imported) && imported.length > 0) {
+                    setLayouts(imported);
+                    if (imported[0].zones) {
+                      setZones(imported[0].zones);
+                      setLayoutName(imported[0].name);
+                    }
+                  }
+                } catch (error) {
+                  alert('Invalid JSON file');
+                }
+              };
+              reader.readAsText(file);
+            }
+          };
+
+          const loadLayout = (layout) => {
+            setZones(layout.zones);
+            setLayoutName(layout.name);
+            setSelectedZone(null);
+          };
+
+          return (
+            <div className="w-full max-w-7xl mx-auto p-6 bg-gray-900 text-white">
+              <div className="mb-6">
+                <h1 className="text-3xl font-bold mb-2">KZones Layout Designer</h1>
+                <p className="text-gray-400">Design window tiling layouts for your display</p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                  <div className="bg-gray-800 p-4 rounded-lg">
+                    <label className="block text-sm font-medium mb-2">Layout Name</label>
+                    <input
+                      type="text"
+                      value={layoutName}
+                      onChange={(e) => setLayoutName(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                    />
+                  </div>
+
+                  <div className="bg-gray-800 p-4 rounded-lg lg:col-span-2">
+                    <h3 className="font-semibold mb-3">Display Resolution</h3>
+                    <div className="space-y-2">
+                      <select
+                        value={resolutionPresets.find(p => p.width === displayResolution.width && p.height === displayResolution.height)?.name || "Custom"}
+                        onChange={(e) => {
+                          const preset = resolutionPresets.find(p => p.name === e.target.value);
+                          if (preset && preset.width > 0) {
+                            handleResolutionChange(preset);
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                      >
+                        {resolutionPresets.map(preset => (
+                          <option key={preset.name} value={preset.name}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          value={displayResolution.width}
+                          onChange={(e) => handleCustomResolution(e.target.value, displayResolution.height)}
+                          className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                          min="1"
+                          placeholder="Width"
+                        />
+                        <input
+                          type="number"
+                          value={displayResolution.height}
+                          onChange={(e) => handleCustomResolution(displayResolution.width, e.target.value)}
+                          className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                          min="1"
+                          placeholder="Height"
+                        />
+                      </div>
+
+                      <div className="text-xs text-gray-400">
+                        Ratio: {(displayResolution.width / displayResolution.height).toFixed(2)}:1
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800 p-4 rounded-lg">
+                    <h3 className="font-semibold mb-3">Snap Settings</h3>
+                    <div className="space-y-2">
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={snapEnabled}
+                          onChange={(e) => setSnapEnabled(e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm">Enable</span>
+                      </label>
+
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">
+                          Tolerance: {snapTolerance}px
+                        </label>
+                        <input
+                          type="range"
+                          min="5"
+                          max="25"
+                          value={snapTolerance}
+                          onChange={(e) => setSnapTolerance(parseInt(e.target.value))}
+                          className="w-full"
+                          disabled={!snapEnabled}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800 p-4 rounded-lg">
+                    <h3 className="font-semibold mb-3">Zones</h3>
+                    <div className="text-2xl font-bold text-blue-400 mb-2">{zones.length}</div>
+                    <div className="text-xs text-gray-400">
+                      {selectedZone !== null ? `Selected: Zone ${selectedZone + 1}` : 'Click zone to select'}
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800 p-4 rounded-lg">
+                    <h3 className="font-semibold mb-3">Actions</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={clearZones}
+                        className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded flex items-center justify-center text-xs"
+                      >
+                        <Trash2 size={12} className="mr-1" />
+                        Clear
+                      </button>
+
+                      <button
+                        onClick={addToLayouts}
+                        disabled={zones.length === 0}
+                        className="px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded flex items-center justify-center text-xs"
+                      >
+                        <Save size={12} className="mr-1" />
+                        Save
+                      </button>
+
+                      <button
+                        onClick={exportLayout}
+                        disabled={zones.length === 0}
+                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded flex items-center justify-center text-xs"
+                      >
+                        <Download size={12} className="mr-1" />
+                        Export
+                      </button>
+
+                      <label className="px-2 py-1 bg-orange-600 hover:bg-orange-700 rounded flex items-center justify-center text-xs cursor-pointer">
+                        <Upload size={12} className="mr-1" />
+                        Import
+                        <input
+                          type="file"
+                          accept=".json"
+                          onChange={importLayouts}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-800 p-4 rounded-lg">
+                  <div className="mb-4 flex justify-between items-center">
+                    <h2 className="text-xl font-semibold">Canvas ({displayResolution.width}x{displayResolution.height})</h2>
+                    <div className="text-sm text-gray-400">
+                      Drag to create • Click and drag zones to move • Green lines show snap points
+                    </div>
+                  </div>
+                  <div className="border border-gray-600 inline-block">
+                    <canvas
+                      ref={canvasRef}
+                      width={canvasWidth}
+                      height={canvasHeight}
+                      className={`cursor-${cursorStyle === 'grab' ? 'grab' : cursorStyle === 'grabbing' ? 'grabbing' : 'crosshair'}`}
+                      onMouseDown={handleMouseDown}
+                      onMouseMove={(e) => {
+                        handleMouseMove(e);
+                        updateCursor(e);
+                      }}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-gray-800 p-4 rounded-lg">
+                    <h3 className="font-semibold mb-3">Zone List ({zones.length})</h3>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {zones.map((zone, index) => (
+                        <div
+                          key={index}
+                          className={`flex items-center justify-between p-2 rounded text-sm ${
+                            selectedZone === index ? 'bg-blue-600' : 'bg-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2">
+                            <div
+                              className="w-4 h-4 rounded"
+                              style={{ backgroundColor: colors[index % colors.length] }}
+                            />
+                            <span>Zone {index + 1}</span>
+                            <span className="text-xs text-gray-400">
+                              ({zone.x.toFixed(1)}, {zone.y.toFixed(1)}) {zone.width.toFixed(1)}×{zone.height.toFixed(1)}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => deleteZone(index)}
+                            className="text-red-400 hover:text-red-300"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                      {zones.length === 0 && (
+                        <div className="text-gray-500 text-center py-4">
+                          No zones created yet. Drag on the canvas to create zones.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-800 p-4 rounded-lg">
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="font-semibold">Saved Layouts ({layouts.length})</h3>
+                      <button
+                        onClick={exportAllLayouts}
+                        disabled={layouts.length === 0 && zones.length === 0}
+                        className="px-3 py-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded flex items-center space-x-1 text-sm"
+                      >
+                        <Download size={14} />
+                        <span>Export All</span>
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {layouts.map((layout, index) => (
+                        <button
+                          key={index}
+                          onClick={() => loadLayout(layout)}
+                          className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+                        >
+                          <div className="font-medium">{layout.name}</div>
+                          <div className="text-xs text-gray-400">{layout.zones.length} zones</div>
+                        </button>
+                      ))}
+                      {layouts.length === 0 && (
+                        <div className="text-gray-500 text-center py-4">
+                          No saved layouts yet. Create zones and click "Save" to store layouts.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ZoneDesigner />);
+    </script>
+</body>
+</html>
