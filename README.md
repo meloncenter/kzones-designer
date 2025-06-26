@@ -126,6 +126,18 @@ This is a standalone HTML file that can be easily modified:
 - Modify the JavaScript code in the `<script>` section
 - Reload in browser to test changes
 
+## Technical Documentation
+
+For those interested in understanding the implementation details, see the `file-structure-overview.md` which provides:
+- Complete code architecture breakdown
+- JavaScript component explanations
+- Canvas rendering pipeline details
+- State management patterns
+- Event handling system overview
+- Performance optimization techniques
+
+The technical docs are essential for anyone looking to modify, extend, or contribute to the zone designer.
+
 ## License
 
 This tool is designed for use with KZones and KWin on KDE Plasma. Feel free to modify and distribute.
